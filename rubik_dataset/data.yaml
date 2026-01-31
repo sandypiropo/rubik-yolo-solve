@@ -1,0 +1,4 @@
+train: rubik_dataset/images/train
+val: rubik_dataset/images/val
+nc: 2
+names: ["solved", "unsolved"]
