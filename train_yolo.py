@@ -1,20 +1,9 @@
 from ultralytics import YOLO
-import cv2
 
-# Treinamento do modelo YOLOv8
-model = YOLO('yolov8s.pt')
-results = model.train(
-    data='rubik_dataset/data.yaml',
-    epochs=50,
-    imgsz=640,
-    batch=16,
-    project='runs/train',
-    name='cube_detection'
-)
+# Carregar modelo treinado
+model = YOLO("runs/detect/runs/train/cube_detection2/weights/best.pt")
 
-img_path = 'rubik_dataset/images/val/cube_000.jpg'
-pred = model(img_path)
-pred[0].show()  # Exibe a imagem com as detecções
-
-pred[0].save('predicted.jpg')
-print('Previsão salva em predicted.jpg')
+# Prever uma imagem
+img_path = "rubik_dataset/images/val/6f5208c5b6943b6c97db4c6f557aba19.jpg"  # Altere para o caminho desejado
+results = model.predict(source=img_path)
+results.show()  # mostra a imagem com bounding boxes
