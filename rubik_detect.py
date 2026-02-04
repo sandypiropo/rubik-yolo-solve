@@ -7,12 +7,13 @@ import datetime
 LOG_FILE = 'rubikvision.log'
 MODEL_PATH = 'runs/detect/runs/train/cube_detection2/weights/best.pt'
 CUBE_CLASS_IDX = 0
-COLOR_TOLERANCE = 20
+COLOR_TOLERANCE = 80
 
 def log_event(message: str):
     """Registra mensagem no arquivo de log com timestamp."""
     with open(LOG_FILE, 'a', encoding='utf-8') as logf:
         logf.write(f"[{datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}\n")
+        logf.flush()
 
 def capture_video():
     """Inicializa a captura de vídeo da webcam padrão."""
@@ -55,12 +56,22 @@ def process_cube_face(frame, bbox):
     return grid
 
 def classify_cube_state(hsv_grid, tol=COLOR_TOLERANCE):
-    """Classifica o estado do cubo como montado ou não montado baseado na similaridade das cores."""
-    center_color = hsv_grid[4]
-    for hsv in hsv_grid:
-        if np.linalg.norm(np.array(hsv) - np.array(center_color)) > tol:
-            return 'Cubo Não Montado'
-    return 'Cubo Montado'
+    """
+    Classifica o estado do cubo como montado ou não montado baseado na similaridade das cores.
+    Otimizado para tolerar pequenas variações e adaptar-se a diferentes condições de iluminação.
+    Considera montado se pelo menos 7 de 9 quadrados forem próximos do centro.
+    Também faz uma checagem robusta para outliers e adapta a tolerância se houver muita variação global.
+    """
+    center_color = np.array(hsv_grid[4])
+    diffs = [np.linalg.norm(np.array(hsv) - center_color) for hsv in hsv_grid]
+    # Adaptação: se a variância das diferenças for alta, aumenta a tolerância
+    var = np.var(diffs)
+    adaptive_tol = tol + min(var, 40)  # Limita o aumento para não ser exagerado
+    # Considera montado se pelo menos 7 quadrados são próximos do centro
+    close_count = sum(d < adaptive_tol for d in diffs)
+    if close_count >= 7:
+        return 'Cubo Montado'
+    return 'Cubo Não Montado'
 
 def main():
     """Função principal: inicializa, executa detecção e logging, e exibe resultados."""
@@ -82,9 +93,15 @@ def main():
                 hsv_grid = process_cube_face(frame, (x1, y1, x2, y2))
                 status = classify_cube_state(hsv_grid)
                 cv2.rectangle(frame, (x1, y1), (x2, y2), (0,255,0), 2)
-                color = (0,0,255) if status == 'Cubo Não Montado' else (0,255,0)
-                cv2.putText(frame, status, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                log_event(f"{status}: bbox=({x1}, {y1}, {x2}, {y2})")
+                if status == 'Cubo Montado':
+                    label = 'Rubik Solved'
+                    color = (0,255,0)
+                else:
+                    label = 'Rubik Not Solved'
+                    color = (0,0,255)
+                cv2.putText(frame, label, (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                print(label)
+                log_event(f"{label}: bbox=({x1}, {y1}, {x2}, {y2})")
             cv2.imshow('RubikVisionSolve - Video', frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
